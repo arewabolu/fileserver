@@ -124,7 +124,6 @@ func UserDownloadHandle(w http.ResponseWriter, r *http.Request) {
 
 	byteFile, _ := io.ReadAll(usrFile)
 	w.Write(byteFile)
-
 }
 
 func UserUploadHandle(w http.ResponseWriter, r *http.Request) {
@@ -154,7 +153,25 @@ func UserUploadHandle(w http.ResponseWriter, r *http.Request) {
 	err = uploadFile(reqSplit(r)+"/"+fileHeader.Filename, file)
 	if err != nil {
 		fmt.Println(err)
+		return
 	}
 	w.Write([]byte("yourfile has been sucessfully uploaded"))
 	w.WriteHeader(http.StatusOK)
+}
+
+func createFolderHandle(w http.ResponseWriter, r *http.Request) {
+	var folderName string
+	err := json.NewDecoder(r.Body).Decode(&folderName)
+	if err != nil {
+		w.Write([]byte("could not process your request. please try again."))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	err = createFolder(folderName)
+	if err != nil {
+		w.Write([]byte("we were unable to create your folder"))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 }

@@ -13,6 +13,7 @@ func groupRoutes(r chi.Router) {
 	r.Get("/user/{ID}/", UserPageHandle)
 	r.Get("/user/{ID}/download/", UserDownloadHandle)
 	r.Post("/user/{ID}/upload/", UserUploadHandle)
+	r.Post("/user/{ID}/create-folder/", createFolderHandle)
 }
 
 func main() {
