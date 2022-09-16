@@ -50,7 +50,16 @@ func listFiles(folderName string) ([]string, error) {
 	}
 	return keyNameStruct, nil
 }
-
+func createFolder(folderName string) error {
+	_, err := svc.PutObject(context.TODO(), &s3.PutObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(folderName),
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
 func uploadFile(keyName string, file io.Reader) error {
 	_, err := svc.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket: aws.String(bucketName),
