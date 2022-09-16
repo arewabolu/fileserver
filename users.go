@@ -1,13 +1,12 @@
 package main
 
 type User struct {
-	ID           int    `json:"id"`
-	FullName     string `json: "fullname"`
+	ID           int    `json:"-"`
+	FullName     string `json:"fullname" pg:"fullname"`
 	Email        string `json:"email"`
-	PasswordHash string `json:"passwordhash"`
+	PasswordHash string `json:"password" pg:"passwordhash"`
 }
 
-//type Files struct {
-//	ID        int      `pg:`
-//	FileStore []string `pg:`
-//}
+type Files struct {
+	Filename string `json:"filename"`
+}
