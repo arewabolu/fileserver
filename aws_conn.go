@@ -83,9 +83,3 @@ func downloadFile(keyName string) io.Reader {
 	}
 	return object.Body
 }
-
-//us-east-1
-//s$ export AWS_ACCESS_KEY_ID=YOUR_AKID
-//$ export AWS_SECRET_ACCESS_KEY=FNRLlaA08iqN9nJh33C1AjXTOmH+ajZ8kYBvnXi4
-//AWS access portal URL
-//https://d-9067b9f60f.awsapps.com/start
