@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"os"
@@ -11,14 +12,6 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/crypto/bcrypt"
 )
-
-//type JWTClaims struct {
-//	Email  string
-//	UserId int
-//	jwt.RegisteredClaims
-//}
-
-//type adapter func(http.Handler) http.Handler
 
 func passwordHash(password string) (hashedPassword []byte, err error) {
 	hashedPassword, err = bcrypt.GenerateFromPassword([]byte(password), 14)
@@ -41,39 +34,45 @@ func keyRetriever() []byte {
 	return data
 }
 
-func GenerateJWT(ID int) (tokenString string, err error) {
+func GenerateJWT(ID int, email string) (tokenString string, err error) {
 	expirationTime := time.Now().Add(2 * time.Hour)
-	claims := jwt.RegisteredClaims{
-		Issuer:    strconv.Itoa(ID),
-		ExpiresAt: jwt.NewNumericDate(expirationTime),
+	claims := JWTClaims{
+		Email:  email,
+		UserId: strconv.Itoa(ID),
+		RegisteredClaims: jwt.RegisteredClaims{
+			//Issuer:    strconv.Itoa(ID),
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+		},
 	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err = token.SignedString(keyRetriever())
 	return
 }
 
-func ValidateJWT(givenToken string) (string, error) {
+func ValidateJWT(givenToken string) (*JWTClaims, error) {
 	token, err := jwt.ParseWithClaims(
 		givenToken,
-		&jwt.RegisteredClaims{},
+		&JWTClaims{},
 		func(token *jwt.Token) (interface{}, error) {
 			return keyRetriever(), nil
 		},
 	)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	//Converts if token.Claims is of type JWY
-	claims, ok := token.Claims.(*jwt.RegisteredClaims)
+	claims, ok := token.Claims.(*JWTClaims)
 	if !ok {
 		err = errors.New("unable to verify claims")
-		return "", err
+		return nil, err
 	}
 	if claims.ExpiresAt.Unix() < time.Now().Local().Unix() {
 		err = errors.New("token expired")
-		return "", err
+		return nil, err
 	}
-	return claims.Issuer, err
+
+	return claims, err
 }
 
 func middlewareAUth(next http.Handler) http.Handler {
@@ -82,37 +81,21 @@ func middlewareAUth(next http.Handler) http.Handler {
 		parts := strings.Split(header, "Bearer")
 		token := strings.TrimSpace(parts[2])
 
-		issuerID, validationErr := ValidateJWT(token)
+		claims, validationErr := ValidateJWT(token)
 		if validationErr != nil {
 			w.Write([]byte(validationErr.Error()))
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		uri := strings.SplitN(r.RequestURI, "/", 4)
+		//	fmt.Println(claims.ID)
+		ctx := context.WithValue(r.Context(), uuid, claims.UserId)
 
-		if issuerID != uri[2] {
-			w.WriteHeader(http.StatusUnauthorized)
-			http.NotFound(w, r)
-			return
-		}
 		//If the method is post and the uri has /user/userid/ then check if userid is equal to issuerid
 		//if the method is get return a users file list in bucket
 		//if the method is get with download then check if userid is equal to issuerid
 		//fmt.Println(uri[2]) // get item 2 from split uri which should be id
 
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	},
 	)
-}
-
-// splits the request uri string
-// and appends it to be S3 ready.
-func reqSplit(r *http.Request) string {
-	uri := strings.SplitN(r.RequestURI, "/", 4)
-	return strAppender(uri[2])
-}
-
-// appends strings for S3 call
-func strAppender(s string) string {
-	return "user" + s + "files"
 }

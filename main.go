@@ -10,19 +10,22 @@ import (
 
 func groupRoutes(r chi.Router) {
 	r.Use(middlewareAUth)
-	r.Get("/user/{ID}/", UserPageHandle)
-	r.Get("/user/{ID}/download/", UserDownloadHandle)
-	r.Post("/user/{ID}/upload/", UserUploadHandle)
-	r.Post("/user/{ID}/create-folder/", createFolderHandle)
+
+	r.Get("/user/list-files/", UserPageHandle)
+	r.Get("/user/download/", UserDownloadHandle)
+
+	r.Post("/user/upload/{path}/", UserUploadHandle)
+	r.Post("/user/create-new-folder/", createFolderHandle)
 }
 
 func main() {
 	router := chi.NewRouter()
 
+	router.Use(middleware.CleanPath)
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
 	router.Group(groupRoutes)
-	router.Post("/register/", postCreateAccount)
+	router.Post("/register/", CreateAccount)
 	router.Post("/login/", authHandler)
 
 	log.Fatal(http.ListenAndServe(":8080", router))

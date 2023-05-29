@@ -8,5 +8,6 @@ type User struct {
 }
 
 type Files struct {
-	Filename string `json:"filename"`
+	Filename   string `json:"filename"`
+	FolderName string `json:"foldername"`
 }

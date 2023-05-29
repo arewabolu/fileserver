@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/go-pg/pg/v10"
 )
 
@@ -15,7 +16,7 @@ const maxUploadSize = 200 << 20
 
 //const maxUploadSize2 = 20 * 10 * 1024 * 1024
 
-func postCreateAccount(w http.ResponseWriter, r *http.Request) {
+func CreateAccount(w http.ResponseWriter, r *http.Request) {
 	creds := &User{}
 	jsErr := json.NewDecoder(r.Body).Decode(creds)
 	if jsErr != nil {
@@ -34,8 +35,6 @@ func postCreateAccount(w http.ResponseWriter, r *http.Request) {
 			PasswordHash: string(hashedPaswd),
 		}
 
-		//Miracle in Cell No. 7, The Grand Heist
-
 		_, insErr := dbConn.Model(dbCred).Insert()
 		if insErr != nil {
 			w.Write([]byte("unfortunately we couldn't create your account. Please try again."))
@@ -49,7 +48,7 @@ func postCreateAccount(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		err := createUserBucket(strAppender(strconv.Itoa(dbCred.ID)))
+		err := createUserHolder(usrPath(strconv.Itoa(dbCred.ID)))
 		if err != nil {
 			fmt.Println("create bucket error:", err)
 		}
@@ -85,7 +84,7 @@ func authHandler(w http.ResponseWriter, r *http.Request) {
 	if pswdValErr != nil {
 		w.Write([]byte("incorrect password"))
 	}
-	JWTtoken, err := GenerateJWT(dbCred.ID)
+	JWTtoken, err := GenerateJWT(dbCred.ID, email)
 	if err != nil {
 		w.Write([]byte("user does not exist")) //why here?
 	}
@@ -99,8 +98,8 @@ func authHandler(w http.ResponseWriter, r *http.Request) {
 
 func UserPageHandle(w http.ResponseWriter, r *http.Request) {
 	//get data from S3 to display as json response
-
-	list, err := listFiles(reqSplit(r))
+	user := r.Context().Value(uuid).(string)
+	list, err := listFiles(usrPath(user))
 	if err != nil {
 		w.Write([]byte("failed to load list"))
 		w.WriteHeader(http.StatusInternalServerError)
@@ -114,21 +113,17 @@ func UserPageHandle(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func UserDownloadHandle(w http.ResponseWriter, r *http.Request) {
-	//get from s3 and return to user
-	w.Header().Set("Content-Type", "application/octet-stream")
-	file := new(Files)
-	json.NewDecoder(r.Body).Decode(file)
-	keyName := reqSplit(r) + "/" + file.Filename
-	usrFile := downloadFile(keyName)
-
-	byteFile, _ := io.ReadAll(usrFile)
-	w.Write(byteFile)
-}
-
 func UserUploadHandle(w http.ResponseWriter, r *http.Request) {
-	//parse data and send to s3 bucket
-
+	s1 := chi.URLParam(r, "path")
+	if s1 == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	s := chi.URLParamFromCtx(r.Context(), "path")
+	if s == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 	err := r.ParseMultipartForm(maxUploadSize)
 
@@ -149,8 +144,8 @@ func UserUploadHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-
-	err = uploadFile(reqSplit(r)+"/"+fileHeader.Filename, file)
+	user := r.Context().Value(uuid).(string)
+	err = uploadFile(usrPath(user)+fileHeader.Filename, file)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -160,18 +155,42 @@ func UserUploadHandle(w http.ResponseWriter, r *http.Request) {
 }
 
 func createFolderHandle(w http.ResponseWriter, r *http.Request) {
-	var folderName string
-	err := json.NewDecoder(r.Body).Decode(&folderName)
+	f := new(Files)
+	err := json.NewDecoder(r.Body).Decode(f)
 	if err != nil {
 		w.Write([]byte("could not process your request. please try again."))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	err = createFolder(folderName)
+	user := r.Context().Value(uuid).(string)
+	err = createFolder(f.FolderName, usrPath(user))
 	if err != nil {
 		w.Write([]byte("we were unable to create your folder"))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	w.Write([]byte("folder successfully created."))
+}
+
+func UserDownloadHandle(w http.ResponseWriter, r *http.Request) {
+	//get from s3 and return to user
+	w.Header().Set("Content-Type", "application/octet-stream")
+	file := new(Files)
+	err := json.NewDecoder(r.Body).Decode(file)
+	if err != nil {
+		w.Write([]byte("could not process request"))
+		w.WriteHeader(http.StatusBadRequest)
+	}
+	user := r.Context().Value(uuid).(string)
+	keyName := usrPath(user) + file.Filename
+	usrFile, err := downloadFile(keyName)
+	if err != nil {
+		w.Write([]byte("the requested file does not exist"))
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	byteFile, _ := io.ReadAll(usrFile)
+	w.Write(byteFile)
 }
